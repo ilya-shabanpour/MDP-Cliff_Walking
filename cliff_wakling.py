@@ -188,21 +188,55 @@ class CliffWalking(CliffWalkingEnv):
             )
 
 
+# defines reward for actions
+def get_reward(current_position, goal_position, cliff_positions, act):
+    goal_reward = 200
+    cliff_fall_penalty = -100
+    step_penalty = -1
+    step_left_penalty = -2  # encouraging it to move forward
+
+    if current_position == goal_position:
+        return goal_reward
+    # Check if the current position is a cliff
+    elif current_position in cliff_positions:
+        return cliff_fall_penalty
+    elif act == 3:
+        return step_left_penalty
+    else:
+        return step_penalty
+
+
+# sets optimal values for each state
 def value_iteration(env, gamma, itr_num):
     V = np.zeros(s_num)
-    V[47] = 1000
     for i in range(itr_num):
         V_new = np.zeros(s_num)
-        V_new[47] = 1000
+        V_new[47] = 100
         for state in range(s_num - 1):
             Q_list = []
             for action in range(a_num):
-                transitions = env.P[state][action]
-
-                Q = sum([T[0] * (T[2] + gamma * V[T[1]]) for T in transitions])
+                Q = 0
+                transitions = env.P[state]
+                if action == 0:
+                    temp = transitions.pop(2)
+                    key = 2
+                elif action == 1:
+                    temp = transitions.pop(3)
+                    key = 3
+                elif action == 2:
+                    key = 0
+                    temp = transitions.pop(0)
+                else:
+                    temp = transitions.pop(1)
+                    key = 1
+                # Bellman Equation
+                for T in transitions.items():
+                    trans_key = T[0]
+                    T = T[1]
+                    Q += T[0][0] * (get_reward(states_pos[state], (3, 11), env.cliff_positions, trans_key) + gamma * V[T[0][1]])
 
                 Q_list.append(Q)
-
+                transitions[key] = temp
             V_new[state] = max(Q_list)
 
         if np.max(np.abs(V_new - V)) < 1e-10:  # if converged ==> break
@@ -212,17 +246,34 @@ def value_iteration(env, gamma, itr_num):
     return V
 
 
-# Find optimal policy using optimal values
-def policy_iteration(env, optimal_V, gamma):
+# Finds optimal policy using optimal values
+def find_optimal_policy(env, optimal_V, gamma):
     optimal_policy = np.zeros(s_num, dtype=int)
     for state in range(s_num):
         Q_list = []
         for action in range(a_num):
-            transitions = env.P[state][action]
-
-            Q = sum([T[0] * (T[2] + gamma * optimal_V[T[1]]) for T in transitions])
+            Q = 0
+            transitions = env.P[state]
+            if action == 0:
+                temp = transitions.pop(2)
+                key = 2
+            elif action == 1:
+                temp = transitions.pop(3)
+                key = 3
+            elif action == 2:
+                key = 0
+                temp = transitions.pop(0)
+            else:
+                temp = transitions.pop(1)
+                key = 1
+            # Bellman Equation
+            for T in transitions.items():
+                trans_key = T[0]
+                T = T[1]
+                Q += T[0][0] * (get_reward(states_pos[state], (3, 11), env.cliff_positions, trans_key) + gamma * optimal_V[T[0][1]])
 
             Q_list.append(Q)
+            transitions[key] = temp
 
         optimal_policy[state] = np.argmax(Q_list)
     return optimal_policy
@@ -234,6 +285,14 @@ if __name__ == '__main__':
     env = CliffWalking(render_mode="human")
     observation, info = env.reset(seed=30)
 
+    # converts state number to 2D position
+    states_pos = {0: (0, 0), 1: (0, 1), 2: (0, 2), 3: (0, 3), 4: (0, 4), 5: (0, 5), 6: (0, 6), 7: (0, 7), 8: (0, 8),
+                  9: (0, 9), 10: (0, 10), 11: (0, 11), 12: (1, 0), 13: (1, 1), 14: (1, 2), 15: (1, 3), 16: (1, 4), 17: (1, 5),
+                  18: (1, 6), 19: (1, 7), 20: (1, 8), 21: (1, 9), 22: (1, 10), 23: (1, 11), 24: (2, 0), 25: (2, 1), 26: (2, 2),
+                  27: (2, 3), 28: (2, 4), 29: (2, 5), 30: (2, 6), 31: (2, 7), 32: (2, 8), 33: (2, 9), 34: (2, 10), 35: (2, 11),
+                  36: (3, 0), 37: (3, 1), 38: (3, 2), 39: (3, 3), 40: (3, 4), 41: (3, 5), 42: (3, 6), 43: (3, 7), 44: (3, 8),
+                  45: (3, 9), 46: (3, 10), 47: (3, 11)}
+
     s_num = env.observation_space.n
     a_num = env.action_space.n
     gamma = 0.9
@@ -242,7 +301,8 @@ if __name__ == '__main__':
 
     optimal_values = value_iteration(env, gamma, iteration_num)
 
-    optimal_policy = policy_iteration(env, optimal_values, gamma)
+    optimal_policy = find_optimal_policy(env, optimal_values, gamma)
+    print("Optimal Policy:", optimal_policy)
 
     # Define the maximum number of iterations
     max_iter_number = 1000
